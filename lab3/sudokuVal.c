@@ -8,7 +8,8 @@
 #include <pthread.h>
 #include <sys/syscall.h>
 #include <sys/mman.h>
-#include <sys/stat.h> 
+#include <sys/stat.h>
+#include <omp.h>
 
 #define SIZE 9
 
@@ -134,8 +135,11 @@ void *validateColumns(void *arg) {
     return (void *)true;
 }
 
-// void *validateColumns para sudoku sin necesidad de pasar algun parametro
+
 void *validateCols(void *args){
+    omp_set_nested(true);
+    bool valid = true;
+    #pragma omp parallel for //schedule(dynamic)
     for (int i = 0; i<9;i++){
         for (int j = 0; j<9; j++){
             int number = board[i][j];
@@ -146,18 +150,20 @@ void *validateCols(void *args){
 
                 if (board[x][j] == number && x != i){
                     printf("En la columna %d, el número %d se repite\n", j, number);
-                    printf("Erro de columna en el proceso: %ld\n", syscall(SYS_gettid));
-                    return (void *)false;
+                    printf("Erro de columna en el proceso: %ld\n", omp_get_thread_num());
+                    valid = false;
                 }
             }
             
         }
-        printf("Valido por columna en el proceso: %ld\n", syscall(SYS_gettid));
+        printf("Valido por columna en el proceso: %ld\n", omp_get_thread_num());
     }
+    return (void *)valid;
 }
 
 void *validateRows(void *arg) {
-    printf("Thread ID: %ld\n", syscall(SYS_gettid));
+    bool valid = true;
+    #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < 9; i++) {
         for (int j = 0; j < 9; j++) {
             int number = board[i][j];
@@ -165,16 +171,16 @@ void *validateRows(void *arg) {
 
             for (int y = 0; y < 9; y++) {
                 if (board[i][y] == number && y != j) {
-                    printf("Erro de fila en el proceso: %ld\n", syscall(SYS_gettid));
-                    return (void *)false;
+                    printf("Erro de fila en el proceso: %ld\n", omp_get_thread_num());
+                    valid = false;
                 }
             }
             
         }
-        printf("Valido por fila en el proceso: %ld\n", syscall(SYS_gettid));
+        printf("Valido por fila en el proceso: %ld\n", omp_get_thread_num());
     }
     sleep(3);
-    return (void *)true;
+    return (void *)valid;
 }
 
 bool checkRow() {
@@ -217,7 +223,8 @@ bool checkSquare() {
 }
 
 void *validateSubgrids(void *arg) {
-    printf("Thread ID: %ld\n", syscall(SYS_gettid));
+    bool valid = true;
+    #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < 9; i++) {
         for (int j = 0; j < 9; j++) {
             int number = board[i][j];
@@ -229,19 +236,21 @@ void *validateSubgrids(void *arg) {
             for (int x = startX; x < startX + 3; x++) {
                 for (int y = startY; y < startY + 3; y++) {
                     if (board[x][y] == number && x != i && y != j) {
-                        printf("Erro de subgrid en el proceso: %ld\n", syscall(SYS_gettid));
-                        return (void *)false;
+                        printf("Erro de subgrid en el proceso: %ld\n", omp_get_thread_num());
+                        valid = false;
                     }
-                    printf("Valido por subgrid en el proceso: %ld\n", syscall(SYS_gettid));
+                    
                 }
             }
         }
+        printf("Valido por subgrid en el proceso: %ld\n", omp_get_thread_num());
     }
     sleep(3);
-    return (void *)true;
+    return (void *)valid;
 }
 
 int main(int argc, char *argv[]) {
+    omp_set_num_threads(9);
     if (argc != 2) {
         fprintf(stderr, "Uso: %s sudoku\n", argv[0]);
         exit(EXIT_FAILURE);
